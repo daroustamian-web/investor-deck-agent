@@ -243,9 +243,9 @@ export async function POST(request: Request) {
 
     if (!generateResponse.ok) {
       const errorData = await generateResponse.text();
-      console.error('Gamma API error:', errorData);
+      console.error('Gamma API error:', generateResponse.status, errorData);
       return NextResponse.json(
-        { error: 'Failed to start generation', details: errorData },
+        { error: `Gamma API error (${generateResponse.status}): ${errorData.substring(0, 200)}` },
         { status: generateResponse.status }
       );
     }
