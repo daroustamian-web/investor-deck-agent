@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { FileDown, Loader2, Sparkles, Check, Mail, ExternalLink, AlertCircle } from 'lucide-react';
+import { Loader2, Sparkles, Check, Mail, Send, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
-type GenerationStatus = 'idle' | 'generating' | 'success' | 'error';
+type GenerationStatus = 'idle' | 'generating' | 'success' | 'sending' | 'sent' | 'error';
 
 interface GenerationResult {
-  gammaUrl?: string;
   exportUrl?: string;
   error?: string;
 }
@@ -18,7 +17,7 @@ export function GenerateButton() {
   const [status, setStatus] = useState<GenerationStatus>('idle');
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [email, setEmail] = useState('');
-  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   // Check if we have enough data to generate
   const canGenerate = completedCategories.length >= 2 || Object.keys(projectData).length >= 4;
@@ -36,7 +35,6 @@ export function GenerateButton() {
         body: JSON.stringify({
           projectData,
           companyName: brand.companyName,
-          email: email || undefined,
         }),
       });
 
@@ -45,7 +43,6 @@ export function GenerateButton() {
       if (response.ok && data.success) {
         setStatus('success');
         setResult({
-          gammaUrl: data.gammaUrl,
           exportUrl: data.exportUrl,
         });
       } else {
@@ -59,63 +56,135 @@ export function GenerateButton() {
     }
   };
 
+  const handleSendEmail = async () => {
+    if (!email.trim()) {
+      setEmailError('Please enter your email address');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+
+    setEmailError('');
+    setStatus('sending');
+
+    try {
+      const response = await fetch('/api/send-deck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          exportUrl: result?.exportUrl,
+          projectData,
+          companyName: brand.companyName,
+        }),
+      });
+
+      if (response.ok) {
+        setStatus('sent');
+      } else {
+        setEmailError('Failed to send email. Please try again.');
+        setStatus('success');
+      }
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      setEmailError('Failed to send email. Please try again.');
+      setStatus('success');
+    }
+  };
+
   const handleReset = () => {
     setStatus('idle');
     setResult(null);
+    setEmail('');
+    setEmailError('');
   };
 
-  // Success state
-  if (status === 'success' && result) {
+  // Email sent confirmation
+  if (status === 'sent') {
     return (
-      <div className="p-4 border-t border-slate-200 bg-gradient-to-r from-green-50 to-emerald-50">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
-            <Check className="w-5 h-5 text-white" />
+      <div className="p-6 border-t border-slate-200 bg-gradient-to-r from-green-50 to-emerald-50">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-white" />
           </div>
-          <div>
-            <p className="font-semibold text-green-800">Deck Generated!</p>
-            <p className="text-xs text-green-600">Your professional investor deck is ready</p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {result.gammaUrl && (
-            <a
-              href={result.gammaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-2.5 px-4 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center gap-2 transition-all"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Open in Gamma (Edit & Download)
-            </a>
-          )}
-
-          {result.exportUrl && (
-            <a
-              href={result.exportUrl}
-              download
-              className="w-full py-2.5 px-4 rounded-lg font-medium text-indigo-700 bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center gap-2 transition-all"
-            >
-              <FileDown className="w-4 h-4" />
-              Download PowerPoint
-            </a>
-          )}
-
+          <h3 className="text-xl font-semibold text-green-800 mb-2">You're All Set!</h3>
+          <p className="text-green-700 mb-1">Your investor deck has been sent to:</p>
+          <p className="font-medium text-green-800 mb-4">{email}</p>
+          <p className="text-sm text-green-600 mb-6">
+            Check your inbox (and spam folder) for the download link.
+          </p>
           <button
             onClick={handleReset}
-            className="w-full py-2 px-4 rounded-lg text-sm text-slate-600 hover:bg-slate-100 transition-all"
+            className="text-sm text-green-700 hover:text-green-800 underline"
           >
-            Generate Another Deck
+            Generate another deck
           </button>
         </div>
+      </div>
+    );
+  }
 
-        {email && (
-          <p className="text-xs text-green-600 text-center mt-2">
-            <Mail className="w-3 h-3 inline mr-1" />
-            Email sent to {email}
+  // Success state - ask for email (also handles 'sending' state)
+  if ((status === 'success' || status === 'sending') && result) {
+    return (
+      <div className="p-6 border-t border-slate-200 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+        <div className="text-center mb-5">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center mx-auto mb-3">
+            <Sparkles className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="text-xl font-semibold text-slate-800 mb-1">Your Deck is Ready!</h3>
+          <p className="text-slate-600 text-sm">
+            Enter your email to receive your professional investor deck
           </p>
-        )}
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setEmailError('');
+              }}
+              placeholder="your@email.com"
+              className={cn(
+                "w-full px-4 py-3 border rounded-xl text-center text-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all",
+                emailError ? "border-red-300 bg-red-50" : "border-slate-300"
+              )}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendEmail()}
+            />
+            {emailError && (
+              <p className="text-red-500 text-xs mt-1 text-center">{emailError}</p>
+            )}
+          </div>
+
+          <button
+            onClick={handleSendEmail}
+            disabled={status === 'sending'}
+            className="w-full py-3 px-4 rounded-xl font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 flex items-center justify-center gap-2 transition-all"
+          >
+            {status === 'sending' ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="w-5 h-5" />
+                Send My Deck
+              </>
+            )}
+          </button>
+
+          <p className="text-xs text-slate-500 text-center">
+            We'll email you a link to download your PowerPoint deck
+          </p>
+        </div>
       </div>
     );
   }
@@ -147,29 +216,6 @@ export function GenerateButton() {
   // Default/generating state
   return (
     <div className="p-4 border-t border-slate-200 bg-slate-50">
-      {/* Email input toggle */}
-      {canGenerate && status === 'idle' && (
-        <div className="mb-3">
-          <button
-            onClick={() => setShowEmailInput(!showEmailInput)}
-            className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-          >
-            <Mail className="w-3 h-3" />
-            {showEmailInput ? 'Hide email option' : 'Send copy to email (optional)'}
-          </button>
-
-          {showEmailInput && (
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="client@example.com"
-              className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            />
-          )}
-        </div>
-      )}
-
       <button
         onClick={handleGenerate}
         disabled={!canGenerate || status === 'generating'}
@@ -183,12 +229,12 @@ export function GenerateButton() {
         {status === 'generating' ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            Generating with AI... (30-60 sec)
+            Creating Your Deck...
           </>
         ) : (
           <>
             <Sparkles className="w-5 h-5" />
-            Generate Professional Deck
+            Generate Investor Deck
           </>
         )}
       </button>
@@ -201,7 +247,7 @@ export function GenerateButton() {
 
       {canGenerate && status === 'idle' && (
         <p className="text-xs text-slate-500 text-center mt-2">
-          Powered by Gamma AI • Professional design with charts & images
+          Professional design with charts & images
         </p>
       )}
 
@@ -211,7 +257,7 @@ export function GenerateButton() {
             <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse w-2/3" />
           </div>
           <p className="text-xs text-slate-500 text-center mt-2">
-            Creating your 10-slide investor deck with AI-generated images...
+            Building your 10-slide investor deck...
           </p>
         </div>
       )}
