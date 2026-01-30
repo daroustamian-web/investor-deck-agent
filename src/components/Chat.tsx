@@ -6,7 +6,7 @@ import { useAppStore } from '@/lib/store';
 import { ChatMessage } from './ChatMessage';
 import { ProgressIndicator } from './ProgressIndicator';
 import { GenerateButton } from './GenerateButton';
-import { INITIAL_MESSAGE, getCategoryFromMarker, isAllComplete } from '@/lib/questions';
+import { INITIAL_MESSAGE, getCategoryFromMarker, isAllComplete, detectCategoryFromContent } from '@/lib/questions';
 import { cn } from '@/lib/utils';
 
 export function Chat() {
@@ -49,6 +49,28 @@ export function Chat() {
     }
   }, [input]);
 
+  // Extract data using AI after each exchange
+  const extractDataWithAI = async (allMessages: typeof messages) => {
+    try {
+      const response = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (response.ok) {
+        const { data } = await response.json();
+        if (data && Object.keys(data).length > 0) {
+          setProjectData(data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to extract data:', error);
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -85,19 +107,34 @@ export function Chat() {
         markCategoryComplete(completedCategory);
 
         // Move to next category
-        const categoryOrder = ['site', 'development', 'market', 'financials', 'team', 'terms'];
+        const categoryOrder = ['site', 'development', 'market', 'financials', 'team', 'terms'] as const;
         const currentIndex = categoryOrder.indexOf(completedCategory);
         if (currentIndex < categoryOrder.length - 1) {
-          setCurrentCategory(categoryOrder[currentIndex + 1] as typeof currentCategory);
+          setCurrentCategory(categoryOrder[currentIndex + 1]);
+        }
+      } else {
+        // Fallback: detect category from content if no explicit marker
+        const detectedCategory = detectCategoryFromContent(assistantContent);
+        if (detectedCategory && !completedCategories.includes(detectedCategory)) {
+          // Check if assistant is asking about next category (meaning current is complete)
+          const categoryOrder = ['site', 'development', 'market', 'financials', 'team', 'terms'] as const;
+          const detectedIndex = categoryOrder.indexOf(detectedCategory);
+          const currentIndex = categoryOrder.indexOf(currentCategory);
+
+          if (detectedIndex > currentIndex) {
+            // Mark previous category as complete
+            markCategoryComplete(currentCategory);
+            setCurrentCategory(detectedCategory);
+          }
         }
       }
 
       // Check for all complete
       if (isAllComplete(assistantContent)) {
-        // Mark all remaining categories as complete
-        ['site', 'development', 'market', 'financials', 'team', 'terms'].forEach((cat) => {
-          if (!completedCategories.includes(cat as typeof currentCategory)) {
-            markCategoryComplete(cat as typeof currentCategory);
+        const allCategories = ['site', 'development', 'market', 'financials', 'team', 'terms'] as const;
+        allCategories.forEach((cat) => {
+          if (!completedCategories.includes(cat)) {
+            markCategoryComplete(cat);
           }
         });
       }
@@ -105,8 +142,13 @@ export function Chat() {
       // Add assistant message
       addMessage({ role: 'assistant', content: assistantContent });
 
-      // Extract data from user response (simple parsing)
-      extractProjectData(userMessage);
+      // Extract data using AI (in background)
+      const updatedMessages = [
+        ...messages,
+        { id: '', role: 'user' as const, content: userMessage, timestamp: new Date() },
+        { id: '', role: 'assistant' as const, content: assistantContent, timestamp: new Date() },
+      ];
+      extractDataWithAI(updatedMessages);
     } catch (error) {
       console.error('Chat error:', error);
       addMessage({
@@ -116,65 +158,6 @@ export function Chat() {
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
-    }
-  };
-
-  // Simple data extraction from user responses
-  const extractProjectData = (text: string) => {
-    const updates: Partial<typeof projectData> = {};
-
-    // Address patterns
-    const addressMatch = text.match(
-      /(?:address|located at|property at|at)\s*[:\-]?\s*([^,\n]+(?:,\s*[A-Z]{2}\s*\d{5})?)/i
-    );
-    if (addressMatch) {
-      updates.propertyAddress = addressMatch[1].trim();
-    }
-
-    // Lot size
-    const lotMatch = text.match(/(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:acres?|sq\.?\s*ft\.?|square feet)/i);
-    if (lotMatch) {
-      updates.lotSize = lotMatch[0];
-    }
-
-    // Beds
-    const bedMatch = text.match(/(\d+)\s*(?:beds?|licensed beds)/i);
-    if (bedMatch) {
-      updates.bedCount = bedMatch[1];
-    }
-
-    // Dollar amounts
-    const dollarMatches = Array.from(text.matchAll(/\$\s*([\d,]+(?:\.\d+)?)\s*(?:M|million|K|thousand)?/gi));
-    for (const match of dollarMatches) {
-      const value = match[0];
-      if (value.toLowerCase().includes('m') || parseInt(match[1].replace(/,/g, '')) >= 1000000) {
-        if (!updates.totalProjectCost && text.toLowerCase().includes('total')) {
-          updates.totalProjectCost = value;
-        } else if (!updates.totalRaise && text.toLowerCase().includes('raise')) {
-          updates.totalRaise = value;
-        }
-      }
-    }
-
-    // Percentages
-    const pctMatches = Array.from(text.matchAll(/(\d+(?:\.\d+)?)\s*%/g));
-    for (const match of pctMatches) {
-      const pct = match[0];
-      const context = text.substring(Math.max(0, match.index! - 30), match.index! + 10).toLowerCase();
-      if (context.includes('irr')) {
-        updates.projectedIRR = pct;
-      } else if (context.includes('pref') || context.includes('preferred')) {
-        updates.preferredReturn = pct;
-      } else if (context.includes('cap')) {
-        if (!updates.goingInCapRate) {
-          updates.goingInCapRate = pct;
-        }
-      }
-    }
-
-    // Update store if we found anything
-    if (Object.keys(updates).length > 0) {
-      setProjectData(updates);
     }
   };
 
@@ -191,7 +174,7 @@ export function Chat() {
       <ProgressIndicator />
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}

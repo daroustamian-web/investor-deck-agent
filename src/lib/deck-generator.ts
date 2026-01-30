@@ -4,25 +4,20 @@ import { BrandConfig, ProjectData } from './types';
 interface DeckGeneratorOptions {
   brand: BrandConfig;
   projectData: Partial<ProjectData>;
-  conversationSummary: string;
 }
 
-// Helper to convert hex to RGB for charts
 function hexToRgb(hex: string): string {
   return hex.replace('#', '');
 }
 
-export async function generateInvestorDeck(
-  options: DeckGeneratorOptions
-): Promise<Blob> {
-  const { brand, projectData, conversationSummary } = options;
+export async function generateInvestorDeck(options: DeckGeneratorOptions): Promise<Blob> {
+  const { brand, projectData: data } = options;
   const pptx = new PptxGenJS();
 
   // Presentation setup
   pptx.layout = 'LAYOUT_WIDE';
   pptx.author = brand.companyName || 'Investor Deck Generator';
-  pptx.title = projectData.projectName || 'Investment Opportunity';
-  pptx.subject = 'Real Estate Investment Opportunity';
+  pptx.title = data.projectName || 'Investment Opportunity';
 
   const colors = {
     primary: hexToRgb(brand.primaryColor),
@@ -35,118 +30,96 @@ export async function generateInvestorDeck(
     textLight: '666666',
   };
 
-  // Define master slides
-  defineMasterSlides(pptx, colors, brand);
+  // Generate all slides
+  createCoverSlide(pptx, colors, brand, data);
+  createExecutiveSummarySlide(pptx, colors, brand, data);
+  createOpportunitySlide(pptx, colors, brand, data);
+  createMarketAnalysisSlide(pptx, colors, brand, data);
+  createDevelopmentPlanSlide(pptx, colors, brand, data);
+  createTeamSlide(pptx, colors, brand, data);
+  createFinancialsSlide(pptx, colors, brand, data);
+  createDealStructureSlide(pptx, colors, brand, data);
+  createUseOfFundsSlide(pptx, colors, brand, data);
+  createExitSlide(pptx, colors, brand, data);
 
-  // Generate slides
-  createCoverSlide(pptx, colors, brand, projectData);
-  createExecutiveSummarySlide(pptx, colors, brand, projectData);
-  createOpportunitySlide(pptx, colors, brand, projectData);
-  createMarketAnalysisSlide(pptx, colors, brand, projectData);
-  createDevelopmentPlanSlide(pptx, colors, brand, projectData);
-  createTeamSlide(pptx, colors, brand, projectData);
-  createFinancialsSlide(pptx, colors, brand, projectData);
-  createDealStructureSlide(pptx, colors, brand, projectData);
-  createUseOfFundsSlide(pptx, colors, brand, projectData);
-  createExitSlide(pptx, colors, brand, projectData);
-
-  // Generate blob
-  const blob = (await pptx.write({ outputType: 'blob' })) as Blob;
-  return blob;
+  return (await pptx.write({ outputType: 'blob' })) as Blob;
 }
 
-function defineMasterSlides(
-  pptx: PptxGenJS,
+// Helper to add logo with proper aspect ratio
+function addLogo(slide: PptxGenJS.Slide, logo: string | null, x: number, y: number, maxW: number, maxH: number) {
+  if (!logo) return;
+
+  // Add logo maintaining aspect ratio by setting only width or height
+  slide.addImage({
+    data: logo,
+    x,
+    y,
+    w: maxW,
+    h: maxH,
+    sizing: { type: 'contain', w: maxW, h: maxH },
+  });
+}
+
+// Helper to add slide header
+function addSlideHeader(
+  slide: PptxGenJS.Slide,
+  title: string,
   colors: Record<string, string>,
   brand: BrandConfig
 ) {
-  // Title slide master
-  pptx.defineSlideMaster({
-    title: 'TITLE_MASTER',
-    background: { color: colors.primary },
-    objects: [
-      // Decorative accent bar at bottom
-      {
-        rect: {
-          x: 0,
-          y: 6.8,
-          w: '100%',
-          h: 0.7,
-          fill: { color: colors.secondary },
-        },
-      },
-      // Subtle gradient overlay effect (using semi-transparent shape)
-      {
-        rect: {
-          x: 0,
-          y: 0,
-          w: '100%',
-          h: '100%',
-          fill: { color: colors.dark, transparency: 85 },
-        },
-      },
-    ],
+  // Header background
+  slide.addShape('rect', {
+    x: 0,
+    y: 0,
+    w: '100%',
+    h: 0.9,
+    fill: { color: colors.primary },
   });
 
-  // Content slide master
-  pptx.defineSlideMaster({
-    title: 'CONTENT_MASTER',
-    background: { color: colors.light },
-    objects: [
-      // Header bar
-      {
-        rect: {
-          x: 0,
-          y: 0,
-          w: '100%',
-          h: 1.0,
-          fill: { color: colors.primary },
-        },
-      },
-      // Accent line under header
-      {
-        rect: {
-          x: 0,
-          y: 1.0,
-          w: '100%',
-          h: 0.05,
-          fill: { color: colors.secondary },
-        },
-      },
-      // Footer bar
-      {
-        rect: {
-          x: 0,
-          y: 7.1,
-          w: '100%',
-          h: 0.4,
-          fill: { color: colors.dark },
-        },
-      },
-      // Logo placeholder text (will add actual logo in slide creation)
-      {
-        text: {
-          text: brand.companyName || '',
-          options: {
-            x: 0.4,
-            y: 0.3,
-            w: 3,
-            h: 0.4,
-            fontSize: 14,
-            color: colors.white,
-            fontFace: 'Arial',
-            bold: true,
-          },
-        },
-      },
-    ],
-    slideNumber: {
-      x: 12.5,
-      y: 7.2,
-      color: colors.white,
-      fontSize: 10,
-      fontFace: 'Arial',
-    },
+  // Accent line
+  slide.addShape('rect', {
+    x: 0,
+    y: 0.9,
+    w: '100%',
+    h: 0.04,
+    fill: { color: colors.secondary },
+  });
+
+  // Title text (positioned to not overlap with logo)
+  slide.addText(title, {
+    x: 0.5,
+    y: 0.25,
+    w: 9,
+    h: 0.5,
+    fontSize: 22,
+    color: colors.white,
+    fontFace: 'Arial',
+    bold: true,
+  });
+
+  // Logo in header (right side)
+  if (brand.logo) {
+    addLogo(slide, brand.logo, 11.3, 0.15, 1.5, 0.6);
+  }
+
+  // Footer
+  slide.addShape('rect', {
+    x: 0,
+    y: 7.1,
+    w: '100%',
+    h: 0.4,
+    fill: { color: colors.dark },
+  });
+
+  // Slide number placeholder text
+  slide.addText(brand.companyName || '', {
+    x: 0.5,
+    y: 7.18,
+    w: 4,
+    h: 0.25,
+    fontSize: 9,
+    color: 'AAAAAA',
+    fontFace: 'Arial',
   });
 }
 
@@ -156,46 +129,55 @@ function createCoverSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'TITLE_MASTER' });
+  const slide = pptx.addSlide();
 
-  // Logo (if provided)
+  // Background
+  slide.addShape('rect', {
+    x: 0,
+    y: 0,
+    w: '100%',
+    h: '100%',
+    fill: { color: colors.primary },
+  });
+
+  // Accent bar at bottom
+  slide.addShape('rect', {
+    x: 0,
+    y: 6.8,
+    w: '100%',
+    h: 0.7,
+    fill: { color: colors.secondary },
+  });
+
+  // Logo (centered, top)
   if (brand.logo) {
-    slide.addImage({
-      data: brand.logo,
-      x: 5.5,
-      y: 0.8,
-      w: 2.5,
-      h: 1.0,
-    });
+    addLogo(slide, brand.logo, 5.2, 0.8, 3, 1.2);
   }
 
   // Main title
-  slide.addText(data.projectName || 'Investment Opportunity', {
+  slide.addText(data.projectName || brand.companyName || 'Investment Opportunity', {
     x: 0.5,
     y: 2.5,
     w: 12.33,
     h: 1.2,
-    fontSize: 44,
+    fontSize: 42,
     color: colors.white,
     fontFace: 'Arial',
     bold: true,
     align: 'center',
   });
 
-  // Subtitle - raise amount
-  slide.addText(
-    `${data.totalRaise || '$1.5M'} Equity Investment Opportunity`,
-    {
-      x: 0.5,
-      y: 3.8,
-      w: 12.33,
-      h: 0.6,
-      fontSize: 24,
-      color: colors.secondary,
-      fontFace: 'Arial',
-      align: 'center',
-    }
-  );
+  // Subtitle
+  slide.addText(`${data.totalRaise || '$1.5M'} Equity Investment Opportunity`, {
+    x: 0.5,
+    y: 3.8,
+    w: 12.33,
+    h: 0.6,
+    fontSize: 22,
+    color: colors.secondary,
+    fontFace: 'Arial',
+    align: 'center',
+  });
 
   // Location
   slide.addText(data.propertyAddress || data.marketLocation || 'Southern California', {
@@ -203,29 +185,41 @@ function createCoverSlide(
     y: 4.6,
     w: 12.33,
     h: 0.5,
-    fontSize: 18,
+    fontSize: 16,
     color: 'B0D4F1',
     fontFace: 'Arial',
     align: 'center',
   });
 
+  // Facility type badge
+  if (data.facilityType || data.bedCount) {
+    slide.addText(`${data.facilityType || 'Healthcare'} | ${data.bedCount || '—'} Beds`, {
+      x: 4.5,
+      y: 5.3,
+      w: 4.33,
+      h: 0.4,
+      fontSize: 12,
+      color: colors.white,
+      fontFace: 'Arial',
+      align: 'center',
+      fill: { color: colors.secondary },
+    });
+  }
+
   // Date
-  const today = new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   slide.addText(today, {
     x: 0.5,
-    y: 5.5,
+    y: 5.9,
     w: 12.33,
     h: 0.4,
-    fontSize: 14,
+    fontSize: 12,
     color: '80B0D4',
     fontFace: 'Arial',
     align: 'center',
   });
 
-  // Confidential notice
+  // Confidential
   slide.addText('CONFIDENTIAL', {
     x: 0.5,
     y: 6.9,
@@ -244,96 +238,76 @@ function createExecutiveSummarySlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  // Add logo if provided
-  if (brand.logo) {
-    slide.addImage({
-      data: brand.logo,
-      x: 11.5,
-      y: 0.2,
-      w: 1.5,
-      h: 0.6,
-    });
-  }
-
-  // Title
-  slide.addText('Executive Summary', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
+  addSlideHeader(slide, 'Executive Summary', colors, brand);
 
   // Investment highlights box
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 4.5,
+    h: 4.2,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 8, offset: 2, angle: 45, opacity: 0.15 },
+    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.1 },
   });
 
   slide.addText('Investment Highlights', {
     x: 0.7,
-    y: 1.5,
+    y: 1.35,
     w: 5.6,
-    h: 0.4,
-    fontSize: 16,
+    h: 0.35,
+    fontSize: 14,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
   const highlights = [
-    `${data.facilityType || 'Convalescent Care'} Development`,
+    `${data.facilityType || 'Healthcare'} Development`,
     `${data.bedCount || '—'} Licensed Beds`,
-    `${data.propertyAddress || data.marketLocation || 'Prime SoCal Location'}`,
+    `${data.propertyAddress || data.marketLocation || 'Prime Location'}`,
     `${data.constructionTimeline || '18-24 month'} development timeline`,
     `Projected ${data.projectedIRR || '—'} IRR`,
-    `${data.preferredReturn || '8%'} Preferred Return to LPs`,
+    `${data.preferredReturn || '8%'} Preferred Return`,
   ];
 
-  highlights.forEach((text, index) => {
+  highlights.forEach((text, i) => {
     slide.addText(`• ${text}`, {
       x: 0.9,
-      y: 2.0 + index * 0.55,
+      y: 1.85 + i * 0.5,
       w: 5.4,
-      h: 0.5,
-      fontSize: 13,
+      h: 0.45,
+      fontSize: 12,
       color: colors.text,
       fontFace: 'Arial',
     });
   });
 
   // Key metrics box
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 4.5,
+    h: 4.2,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 8, offset: 2, angle: 45, opacity: 0.15 },
+    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.1 },
   });
 
   slide.addText('Key Metrics', {
     x: 7.0,
-    y: 1.5,
+    y: 1.35,
     w: 5.6,
-    h: 0.4,
-    fontSize: 16,
+    h: 0.35,
+    fontSize: 14,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
   const metrics = [
-    { label: 'Total Raise', value: data.totalRaise || '$1.5M' },
+    { label: 'Total Raise', value: data.totalRaise || '—' },
     { label: 'Total Project Cost', value: data.totalProjectCost || '—' },
     { label: 'Projected IRR', value: data.projectedIRR || '—' },
     { label: 'Equity Multiple', value: data.equityMultiple || '—' },
@@ -341,22 +315,22 @@ function createExecutiveSummarySlide(
     { label: 'Hold Period', value: data.holdPeriod || '5-7 years' },
   ];
 
-  metrics.forEach((metric, index) => {
-    slide.addText(metric.label, {
+  metrics.forEach((m, i) => {
+    slide.addText(m.label, {
       x: 7.2,
-      y: 2.0 + index * 0.55,
+      y: 1.85 + i * 0.5,
       w: 2.5,
       h: 0.4,
-      fontSize: 12,
+      fontSize: 11,
       color: colors.textLight,
       fontFace: 'Arial',
     });
-    slide.addText(metric.value, {
+    slide.addText(m.value, {
       x: 10.0,
-      y: 2.0 + index * 0.55,
+      y: 1.85 + i * 0.5,
       w: 2.5,
       h: 0.4,
-      fontSize: 12,
+      fontSize: 11,
       color: colors.primary,
       fontFace: 'Arial',
       bold: true,
@@ -367,22 +341,22 @@ function createExecutiveSummarySlide(
   // Investment thesis
   slide.addText('Investment Thesis', {
     x: 0.5,
-    y: 6.0,
+    y: 5.6,
     w: 12.33,
-    h: 0.4,
-    fontSize: 14,
+    h: 0.35,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
   slide.addText(
-    `Strategic development opportunity in ${data.marketLocation || 'Southern California'} addressing the growing demand for ${data.facilityType || 'skilled nursing'} beds in an underserved market. Experienced sponsor with proven track record seeking ${data.totalRaise || '$1.5M'} in LP equity.`,
+    `Strategic ${data.facilityType || 'healthcare'} development in ${data.marketLocation || data.propertyAddress || 'Southern California'} addressing growing demand for skilled nursing beds. Experienced sponsor with ${data.sponsorExperience || 'proven track record'} seeking ${data.totalRaise || '$1.5M'} in LP equity.`,
     {
       x: 0.5,
-      y: 6.4,
+      y: 5.95,
       w: 12.33,
-      h: 0.6,
+      h: 0.8,
       fontSize: 11,
       color: colors.text,
       fontFace: 'Arial',
@@ -396,119 +370,107 @@ function createOpportunitySlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
+  addSlideHeader(slide, 'The Opportunity', colors, brand);
 
-  slide.addText('The Opportunity', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
-
-  // Property details section
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Property details
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 3.0,
+    h: 2.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Property Details', {
     x: 0.7,
-    y: 1.45,
+    y: 1.35,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  const propertyDetails = [
-    { label: 'Address', value: data.propertyAddress || '—' },
-    { label: 'Lot Size', value: data.lotSize || '—' },
-    { label: 'Zoning', value: data.zoning || '—' },
-    { label: 'Status', value: data.zoningStatus || '—' },
-    { label: 'Land Basis', value: data.purchasePrice || data.landOwnership || '—' },
+  const propDetails = [
+    ['Address', data.propertyAddress || '—'],
+    ['Lot Size', data.lotSize || '—'],
+    ['Zoning', data.zoning || '—'],
+    ['Status', data.zoningStatus || '—'],
+    ['Land Basis', data.purchasePrice || data.landOwnership || '—'],
   ];
 
-  propertyDetails.forEach((item, index) => {
-    slide.addText(item.label + ':', {
+  propDetails.forEach(([label, value], i) => {
+    slide.addText(`${label}:`, {
       x: 0.9,
-      y: 1.9 + index * 0.4,
-      w: 1.8,
+      y: 1.75 + i * 0.38,
+      w: 1.6,
       h: 0.35,
-      fontSize: 11,
+      fontSize: 10,
       color: colors.textLight,
       fontFace: 'Arial',
     });
-    slide.addText(item.value, {
-      x: 2.8,
-      y: 1.9 + index * 0.4,
-      w: 3.5,
+    slide.addText(value, {
+      x: 2.6,
+      y: 1.75 + i * 0.38,
+      w: 3.7,
       h: 0.35,
-      fontSize: 11,
+      fontSize: 10,
       color: colors.text,
       fontFace: 'Arial',
       bold: true,
     });
   });
 
-  // Development overview section
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Development overview
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 3.0,
+    h: 2.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Development Overview', {
     x: 7.0,
-    y: 1.45,
+    y: 1.35,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  const developmentDetails = [
-    { label: 'Facility Type', value: data.facilityType || 'Convalescent Home' },
-    { label: 'Licensed Beds', value: data.bedCount || '—' },
-    { label: 'Square Footage', value: data.squareFootage || '—' },
-    { label: 'Timeline', value: data.constructionTimeline || '—' },
-    { label: 'Total Cost', value: data.totalProjectCost || '—' },
+  const devDetails = [
+    ['Facility Type', data.facilityType || 'Skilled Nursing'],
+    ['Licensed Beds', data.bedCount || '—'],
+    ['Square Footage', data.squareFootage || '—'],
+    ['Timeline', data.constructionTimeline || '—'],
+    ['Total Cost', data.totalProjectCost || '—'],
   ];
 
-  developmentDetails.forEach((item, index) => {
-    slide.addText(item.label + ':', {
+  devDetails.forEach(([label, value], i) => {
+    slide.addText(`${label}:`, {
       x: 7.2,
-      y: 1.9 + index * 0.4,
-      w: 2.0,
+      y: 1.75 + i * 0.38,
+      w: 1.8,
       h: 0.35,
-      fontSize: 11,
+      fontSize: 10,
       color: colors.textLight,
       fontFace: 'Arial',
     });
-    slide.addText(item.value, {
-      x: 9.3,
-      y: 1.9 + index * 0.4,
-      w: 3.3,
+    slide.addText(value, {
+      x: 9.1,
+      y: 1.75 + i * 0.38,
+      w: 3.5,
       h: 0.35,
-      fontSize: 11,
+      fontSize: 10,
       color: colors.text,
       fontFace: 'Arial',
       bold: true,
@@ -516,21 +478,21 @@ function createOpportunitySlide(
   });
 
   // Why this opportunity
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 4.5,
+    y: 4.2,
     w: 12.33,
-    h: 2.3,
+    h: 2.6,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Why This Opportunity', {
     x: 0.7,
-    y: 4.65,
+    y: 4.35,
     w: 12,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -538,17 +500,17 @@ function createOpportunitySlide(
 
   const reasons = [
     'Aging population driving unprecedented demand for skilled nursing beds',
-    'Limited new supply due to CON requirements and development complexity',
-    'Prime location with strong referral network and hospital proximity',
-    'Experienced operator with proven track record in healthcare real estate',
+    'Limited new supply due to regulatory requirements and development complexity',
+    `Prime location in ${data.marketLocation || 'high-demand market'} with strong referral network`,
+    `Experienced sponsor with ${data.priorDeals || 'multiple'} completed healthcare deals`,
   ];
 
-  reasons.forEach((reason, index) => {
-    slide.addText(`✓ ${reason}`, {
+  reasons.forEach((r, i) => {
+    slide.addText(`✓ ${r}`, {
       x: 0.9,
-      y: 5.1 + index * 0.4,
+      y: 4.75 + i * 0.42,
       w: 11.7,
-      h: 0.35,
+      h: 0.4,
       fontSize: 11,
       color: colors.text,
       fontFace: 'Arial',
@@ -562,101 +524,88 @@ function createMarketAnalysisSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
+  addSlideHeader(slide, 'Market Analysis', colors, brand);
 
-  slide.addText('Market Analysis', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
-
-  // Demographics section
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Demographics box
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 4,
-    h: 3.2,
+    h: 2.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Demographics', {
     x: 0.7,
-    y: 1.45,
+    y: 1.35,
     w: 3.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  // Population stats
   slide.addText(data.population65Plus || '125,000+', {
     x: 0.7,
-    y: 2.0,
+    y: 1.8,
     w: 3.6,
-    h: 0.6,
-    fontSize: 32,
+    h: 0.5,
+    fontSize: 28,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
-  slide.addText('Population 65+ (10-mile radius)', {
+  slide.addText('Population 65+ (10-mi radius)', {
     x: 0.7,
-    y: 2.55,
+    y: 2.3,
     w: 3.6,
-    h: 0.3,
-    fontSize: 10,
+    h: 0.25,
+    fontSize: 9,
     color: colors.textLight,
     fontFace: 'Arial',
   });
 
   slide.addText(data.populationGrowth || '+15%', {
     x: 0.7,
-    y: 3.1,
+    y: 2.8,
     w: 3.6,
-    h: 0.6,
-    fontSize: 32,
+    h: 0.5,
+    fontSize: 28,
     color: colors.accent,
     fontFace: 'Arial',
     bold: true,
   });
-  slide.addText('Projected Growth (10-year)', {
+  slide.addText('Projected 10-Year Growth', {
     x: 0.7,
-    y: 3.65,
+    y: 3.3,
     w: 3.6,
-    h: 0.3,
-    fontSize: 10,
+    h: 0.25,
+    fontSize: 9,
     color: colors.textLight,
     fontFace: 'Arial',
   });
 
-  // Competitive landscape
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Competition box
+  slide.addShape('roundRect', {
     x: 4.7,
-    y: 1.3,
+    y: 1.2,
     w: 4,
-    h: 3.2,
+    h: 2.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Competitive Landscape', {
     x: 4.9,
-    y: 1.45,
+    y: 1.35,
     w: 3.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -664,60 +613,60 @@ function createMarketAnalysisSlide(
 
   slide.addText(data.competitorCount || '6', {
     x: 4.9,
-    y: 2.0,
+    y: 1.8,
     w: 3.6,
-    h: 0.6,
-    fontSize: 32,
+    h: 0.5,
+    fontSize: 28,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
   slide.addText('Competing Facilities', {
     x: 4.9,
-    y: 2.55,
+    y: 2.3,
     w: 3.6,
-    h: 0.3,
-    fontSize: 10,
+    h: 0.25,
+    fontSize: 9,
     color: colors.textLight,
     fontFace: 'Arial',
   });
 
   slide.addText(data.marketOccupancy || '92%', {
     x: 4.9,
-    y: 3.1,
+    y: 2.8,
     w: 3.6,
-    h: 0.6,
-    fontSize: 32,
+    h: 0.5,
+    fontSize: 28,
     color: colors.secondary,
     fontFace: 'Arial',
     bold: true,
   });
   slide.addText('Market Occupancy Rate', {
     x: 4.9,
-    y: 3.65,
+    y: 3.3,
     w: 3.6,
-    h: 0.3,
-    fontSize: 10,
+    h: 0.25,
+    fontSize: 9,
     color: colors.textLight,
     fontFace: 'Arial',
   });
 
-  // Market rates
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Rates box
+  slide.addShape('roundRect', {
     x: 8.9,
-    y: 1.3,
+    y: 1.2,
     w: 4,
-    h: 3.2,
+    h: 2.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Market Rates', {
     x: 9.1,
-    y: 1.45,
+    y: 1.35,
     w: 3.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -725,62 +674,56 @@ function createMarketAnalysisSlide(
 
   slide.addText(data.averageDailyRate || '$325', {
     x: 9.1,
-    y: 2.0,
+    y: 1.8,
     w: 3.6,
-    h: 0.6,
-    fontSize: 32,
+    h: 0.5,
+    fontSize: 28,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
   slide.addText('Average Daily Rate', {
     x: 9.1,
-    y: 2.55,
+    y: 2.3,
     w: 3.6,
-    h: 0.3,
-    fontSize: 10,
+    h: 0.25,
+    fontSize: 9,
     color: colors.textLight,
     fontFace: 'Arial',
   });
 
   // Demand drivers
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 4.7,
+    y: 4.2,
     w: 12.33,
-    h: 2.1,
+    h: 2.6,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Key Demand Drivers', {
     x: 0.7,
-    y: 4.85,
+    y: 4.35,
     w: 12,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  const drivers = (
-    data.demandDrivers ||
-    'Hospital discharge partnerships, aging in place trends, increasing acuity levels, limited new supply'
-  ).split(',');
-
-  drivers.forEach((driver, index) => {
-    if (index < 4) {
-      slide.addText(`• ${driver.trim()}`, {
-        x: 0.9 + (index % 2) * 6,
-        y: 5.3 + Math.floor(index / 2) * 0.4,
-        w: 5.8,
-        h: 0.35,
-        fontSize: 11,
-        color: colors.text,
-        fontFace: 'Arial',
-      });
-    }
+  const drivers = (data.demandDrivers || 'Hospital discharge partnerships, Aging population trends, Limited new supply, Increasing acuity levels').split(',');
+  drivers.slice(0, 4).forEach((d, i) => {
+    slide.addText(`• ${d.trim()}`, {
+      x: 0.9 + (i % 2) * 6.1,
+      y: 4.8 + Math.floor(i / 2) * 0.5,
+      w: 5.9,
+      h: 0.45,
+      fontSize: 11,
+      color: colors.text,
+      fontFace: 'Arial',
+    });
   });
 }
 
@@ -790,105 +733,76 @@ function createDevelopmentPlanSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
-
-  slide.addText('Development Plan', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
+  addSlideHeader(slide, 'Development Plan', colors, brand);
 
   // Timeline
   const phases = [
-    { name: 'Pre-Development', duration: '0-3 months', activities: 'Entitlements, permits, financing' },
-    { name: 'Construction', duration: '3-18 months', activities: 'Ground-up development' },
-    { name: 'Licensing', duration: '18-21 months', activities: 'State licensing, CMS certification' },
-    { name: 'Lease-Up', duration: '21-30 months', activities: 'Ramp to stabilization' },
+    { name: 'Pre-Development', dur: '0-3 mo', desc: 'Permits & Financing' },
+    { name: 'Construction', dur: '3-18 mo', desc: 'Ground-up Build' },
+    { name: 'Licensing', dur: '18-21 mo', desc: 'State Certification' },
+    { name: 'Stabilization', dur: '21-30 mo', desc: 'Lease-up Period' },
   ];
 
   // Timeline bar
-  slide.addShape(pptx.ShapeType.rect, {
+  slide.addShape('rect', {
     x: 0.5,
-    y: 1.8,
+    y: 1.6,
     w: 12.33,
-    h: 0.15,
-    fill: { color: 'E0E0E0' },
+    h: 0.08,
+    fill: { color: 'DDDDDD' },
   });
 
-  phases.forEach((phase, index) => {
-    const xPos = 0.5 + index * 3.08;
+  phases.forEach((p, i) => {
+    const x = 0.5 + i * 3.08;
 
-    // Phase box
-    slide.addShape(pptx.ShapeType.roundRect, {
-      x: xPos,
-      y: 2.2,
-      w: 2.9,
-      h: 1.8,
-      fill: { color: colors.white },
-      shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.1 },
-    });
-
-    // Phase dot on timeline
-    slide.addShape(pptx.ShapeType.ellipse, {
-      x: xPos + 1.3,
-      y: 1.7,
-      w: 0.3,
-      h: 0.3,
+    // Dot
+    slide.addShape('ellipse', {
+      x: x + 1.35,
+      y: 1.5,
+      w: 0.25,
+      h: 0.25,
       fill: { color: colors.primary },
     });
 
-    // Phase number
-    slide.addText(`${index + 1}`, {
-      x: xPos + 1.35,
-      y: 1.72,
-      w: 0.2,
-      h: 0.25,
-      fontSize: 10,
-      color: colors.white,
-      fontFace: 'Arial',
-      bold: true,
+    // Phase card
+    slide.addShape('roundRect', {
+      x,
+      y: 1.95,
+      w: 2.9,
+      h: 1.4,
+      fill: { color: colors.white },
+      shadow: { type: 'outer', blur: 3, offset: 1, angle: 45, opacity: 0.06 },
     });
 
-    // Phase name
-    slide.addText(phase.name, {
-      x: xPos + 0.1,
-      y: 2.35,
-      w: 2.7,
-      h: 0.35,
-      fontSize: 12,
+    slide.addText(p.name, {
+      x,
+      y: 2.05,
+      w: 2.9,
+      h: 0.3,
+      fontSize: 11,
       color: colors.primary,
       fontFace: 'Arial',
       bold: true,
       align: 'center',
     });
-
-    // Duration
-    slide.addText(phase.duration, {
-      x: xPos + 0.1,
-      y: 2.7,
-      w: 2.7,
+    slide.addText(p.dur, {
+      x,
+      y: 2.35,
+      w: 2.9,
       h: 0.25,
-      fontSize: 10,
+      fontSize: 9,
       color: colors.secondary,
       fontFace: 'Arial',
       align: 'center',
     });
-
-    // Activities
-    slide.addText(phase.activities, {
-      x: xPos + 0.1,
-      y: 3.0,
-      w: 2.7,
-      h: 0.8,
+    slide.addText(p.desc, {
+      x,
+      y: 2.65,
+      w: 2.9,
+      h: 0.5,
       fontSize: 9,
       color: colors.textLight,
       fontFace: 'Arial',
@@ -896,49 +810,50 @@ function createDevelopmentPlanSlide(
     });
   });
 
-  // Development specs
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Specs box
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 4.3,
+    y: 3.6,
     w: 6,
-    h: 2.5,
+    h: 3.2,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Facility Specifications', {
     x: 0.7,
-    y: 4.45,
+    y: 3.75,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
   const specs = [
-    { label: 'Facility Type', value: data.facilityType || 'Skilled Nursing Facility' },
-    { label: 'Licensed Beds', value: data.bedCount || '—' },
-    { label: 'Building Size', value: data.squareFootage || '—' },
-    { label: 'General Contractor', value: data.generalContractor || 'TBD' },
+    ['Facility Type', data.facilityType || 'Skilled Nursing'],
+    ['Licensed Beds', data.bedCount || '—'],
+    ['Building Size', data.squareFootage || '—'],
+    ['Contractor', data.generalContractor || 'TBD'],
+    ['Timeline', data.constructionTimeline || '18 months'],
   ];
 
-  specs.forEach((spec, index) => {
-    slide.addText(spec.label + ':', {
+  specs.forEach(([label, value], i) => {
+    slide.addText(`${label}:`, {
       x: 0.9,
-      y: 4.9 + index * 0.4,
-      w: 2.2,
-      h: 0.35,
+      y: 4.2 + i * 0.45,
+      w: 2,
+      h: 0.4,
       fontSize: 11,
       color: colors.textLight,
       fontFace: 'Arial',
     });
-    slide.addText(spec.value, {
-      x: 3.2,
-      y: 4.9 + index * 0.4,
-      w: 3,
-      h: 0.35,
+    slide.addText(value, {
+      x: 3,
+      y: 4.2 + i * 0.45,
+      w: 3.3,
+      h: 0.4,
       fontSize: 11,
       color: colors.text,
       fontFace: 'Arial',
@@ -946,22 +861,22 @@ function createDevelopmentPlanSlide(
     });
   });
 
-  // Budget summary
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Budget box
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 4.3,
+    y: 3.6,
     w: 6,
-    h: 2.5,
+    h: 3.2,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Development Budget', {
     x: 7.0,
-    y: 4.45,
+    y: 3.75,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -969,10 +884,10 @@ function createDevelopmentPlanSlide(
 
   slide.addText(data.totalProjectCost || '$8.5M', {
     x: 7.0,
-    y: 4.9,
+    y: 4.3,
     w: 5.6,
     h: 0.6,
-    fontSize: 28,
+    fontSize: 32,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -981,7 +896,7 @@ function createDevelopmentPlanSlide(
 
   slide.addText('Total Project Cost', {
     x: 7.0,
-    y: 5.5,
+    y: 4.9,
     w: 5.6,
     h: 0.3,
     fontSize: 11,
@@ -989,19 +904,6 @@ function createDevelopmentPlanSlide(
     fontFace: 'Arial',
     align: 'center',
   });
-
-  if (data.constructionCostPerBed) {
-    slide.addText(`${data.constructionCostPerBed} per bed`, {
-      x: 7.0,
-      y: 5.9,
-      w: 5.6,
-      h: 0.3,
-      fontSize: 11,
-      color: colors.secondary,
-      fontFace: 'Arial',
-      align: 'center',
-    });
-  }
 }
 
 function createTeamSlide(
@@ -1010,39 +912,27 @@ function createTeamSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
+  addSlideHeader(slide, 'Team & Track Record', colors, brand);
 
-  slide.addText('Team & Track Record', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
-
-  // Sponsor profile
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Sponsor box
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 4,
+    h: 3.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Sponsor Profile', {
     x: 0.7,
-    y: 1.45,
+    y: 1.35,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -1050,103 +940,102 @@ function createTeamSlide(
 
   slide.addText(data.sponsorName || 'Principal Sponsor', {
     x: 0.7,
-    y: 1.9,
+    y: 1.75,
     w: 5.6,
     h: 0.4,
-    fontSize: 18,
+    fontSize: 16,
     color: colors.text,
     fontFace: 'Arial',
     bold: true,
   });
 
   const sponsorDetails = [
-    data.sponsorExperience || '15+ years in healthcare real estate',
+    data.sponsorExperience || '15+ years in healthcare RE',
     `${data.priorDeals || '10+'} deals completed`,
-    `${data.assetsUnderManagement || '$50M+'} assets under management`,
+    `${data.assetsUnderManagement || '$50M+'} AUM`,
     `${data.priorReturns || '18%+'} average investor IRR`,
-    `${data.coInvestAmount || '5%'} co-investment in this deal`,
+    `${data.coInvestAmount || '5%'} GP co-invest`,
   ];
 
-  sponsorDetails.forEach((detail, index) => {
-    slide.addText(`• ${detail}`, {
+  sponsorDetails.forEach((d, i) => {
+    slide.addText(`• ${d}`, {
       x: 0.9,
-      y: 2.4 + index * 0.45,
+      y: 2.25 + i * 0.42,
       w: 5.4,
       h: 0.4,
-      fontSize: 12,
+      fontSize: 11,
       color: colors.text,
       fontFace: 'Arial',
     });
   });
 
-  // Track record metrics
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Track record box
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 2.3,
+    h: 2.0,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Track Record', {
     x: 7.0,
-    y: 1.45,
+    y: 1.35,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  // Metrics in a row
   const trackMetrics = [
-    { value: data.priorDeals || '10+', label: 'Deals' },
-    { value: data.assetsUnderManagement || '$50M', label: 'AUM' },
-    { value: data.priorReturns || '18%', label: 'Avg IRR' },
+    { val: data.priorDeals || '10+', label: 'Deals' },
+    { val: data.assetsUnderManagement || '$50M', label: 'AUM' },
+    { val: data.priorReturns || '18%', label: 'Avg IRR' },
   ];
 
-  trackMetrics.forEach((metric, index) => {
-    slide.addText(metric.value, {
-      x: 7.2 + index * 1.9,
-      y: 2.0,
+  trackMetrics.forEach((m, i) => {
+    slide.addText(m.val, {
+      x: 7.2 + i * 1.9,
+      y: 1.8,
       w: 1.7,
-      h: 0.5,
-      fontSize: 22,
+      h: 0.45,
+      fontSize: 20,
       color: colors.primary,
       fontFace: 'Arial',
       bold: true,
       align: 'center',
     });
-    slide.addText(metric.label, {
-      x: 7.2 + index * 1.9,
-      y: 2.5,
+    slide.addText(m.label, {
+      x: 7.2 + i * 1.9,
+      y: 2.25,
       w: 1.7,
       h: 0.3,
-      fontSize: 10,
+      fontSize: 9,
       color: colors.textLight,
       fontFace: 'Arial',
       align: 'center',
     });
   });
 
-  // Operator/management
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Operator box
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 3.8,
+    y: 3.4,
     w: 6,
-    h: 1.5,
+    h: 1.6,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Operations', {
     x: 7.0,
-    y: 3.95,
+    y: 3.55,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -1154,7 +1043,7 @@ function createTeamSlide(
 
   slide.addText(`Operator: ${data.operator || 'Experienced third-party operator'}`, {
     x: 7.2,
-    y: 4.4,
+    y: 4.0,
     w: 5.4,
     h: 0.35,
     fontSize: 11,
@@ -1162,46 +1051,34 @@ function createTeamSlide(
     fontFace: 'Arial',
   });
 
-  if (data.managementTeam) {
-    slide.addText(`Management: ${data.managementTeam}`, {
-      x: 7.2,
-      y: 4.8,
-      w: 5.4,
-      h: 0.35,
-      fontSize: 11,
-      color: colors.text,
-      fontFace: 'Arial',
-    });
-  }
-
-  // Investor alignment
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Alignment banner
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 5.5,
+    y: 5.2,
     w: 12.33,
-    h: 1.3,
+    h: 1.5,
     fill: { color: colors.primary },
   });
 
   slide.addText('Investor Alignment', {
     x: 0.7,
-    y: 5.65,
+    y: 5.35,
     w: 12,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.white,
     fontFace: 'Arial',
     bold: true,
   });
 
   slide.addText(
-    `GP is co-investing ${data.coInvestAmount || '5%'} of equity alongside LPs, ensuring aligned interests throughout the project lifecycle.`,
+    `GP is co-investing ${data.coInvestAmount || '5%'} of equity alongside LPs, ensuring aligned interests throughout the project.`,
     {
       x: 0.7,
-      y: 6.1,
+      y: 5.75,
       w: 12,
-      h: 0.5,
-      fontSize: 12,
+      h: 0.6,
+      fontSize: 11,
       color: 'B0D4F1',
       fontFace: 'Arial',
     }
@@ -1214,66 +1091,54 @@ function createFinancialsSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
-
-  slide.addText('Financial Projections', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
+  addSlideHeader(slide, 'Financial Projections', colors, brand);
 
   // Return metrics
   const returnMetrics = [
-    { value: data.projectedIRR || '18%', label: 'Projected IRR' },
-    { value: data.equityMultiple || '2.1x', label: 'Equity Multiple' },
-    { value: data.cashOnCash || '8-12%', label: 'Cash-on-Cash' },
-    { value: data.holdPeriod || '5-7 yrs', label: 'Hold Period' },
+    { val: data.projectedIRR || '18%', label: 'Projected IRR' },
+    { val: data.equityMultiple || '2.1x', label: 'Equity Multiple' },
+    { val: data.cashOnCash || '10-12%', label: 'Cash-on-Cash' },
+    { val: data.holdPeriod || '5-7 yrs', label: 'Hold Period' },
   ];
 
-  returnMetrics.forEach((metric, index) => {
-    slide.addShape(pptx.ShapeType.roundRect, {
-      x: 0.5 + index * 3.15,
-      y: 1.3,
+  returnMetrics.forEach((m, i) => {
+    slide.addShape('roundRect', {
+      x: 0.5 + i * 3.15,
+      y: 1.2,
       w: 2.95,
-      h: 1.5,
+      h: 1.3,
       fill: { color: colors.white },
-      shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+      shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
     });
 
-    slide.addText(metric.value, {
-      x: 0.5 + index * 3.15,
-      y: 1.5,
+    slide.addText(m.val, {
+      x: 0.5 + i * 3.15,
+      y: 1.35,
       w: 2.95,
-      h: 0.7,
-      fontSize: 28,
+      h: 0.55,
+      fontSize: 24,
       color: colors.primary,
       fontFace: 'Arial',
       bold: true,
       align: 'center',
     });
 
-    slide.addText(metric.label, {
-      x: 0.5 + index * 3.15,
-      y: 2.2,
+    slide.addText(m.label, {
+      x: 0.5 + i * 3.15,
+      y: 1.95,
       w: 2.95,
-      h: 0.4,
-      fontSize: 11,
+      h: 0.35,
+      fontSize: 10,
       color: colors.textLight,
       fontFace: 'Arial',
       align: 'center',
     });
   });
 
-  // Pro forma chart (bar chart)
+  // Chart
   const chartData = [
     {
       name: 'NOI ($K)',
@@ -1282,18 +1147,17 @@ function createFinancialsSlide(
     },
   ];
 
-  slide.addChart(pptx.ChartType.bar, chartData, {
+  slide.addChart('bar', chartData, {
     x: 0.5,
-    y: 3.0,
+    y: 2.7,
     w: 6,
-    h: 3.5,
+    h: 3.8,
     barDir: 'col',
     chartColors: [colors.primary],
     showTitle: true,
     title: 'Projected NOI Growth',
     titleColor: colors.text,
-    titleFontSize: 12,
-    titleFontFace: 'Arial',
+    titleFontSize: 11,
     titleBold: true,
     showLegend: false,
     showValue: true,
@@ -1303,50 +1167,51 @@ function createFinancialsSlide(
     valAxisLabelColor: colors.textLight,
     catAxisLabelColor: colors.textLight,
     valGridLine: { style: 'dash', color: 'E0E0E0' },
-    catGridLine: { style: 'none' },
   });
 
-  // Cap rate analysis
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Valuation box
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 3.0,
+    y: 2.7,
     w: 6,
-    h: 3.5,
+    h: 3.8,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Valuation Analysis', {
     x: 7.0,
-    y: 3.15,
+    y: 2.85,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  const valuationItems = [
-    { label: 'Going-In Cap Rate', value: data.goingInCapRate || '—' },
-    { label: 'Exit Cap Rate', value: data.exitCapRate || '—' },
-    { label: 'Stabilized NOI', value: data.projectedNOI || '—' },
+  const valItems = [
+    ['Going-In Cap', data.goingInCapRate || '—'],
+    ['Exit Cap', data.exitCapRate || '—'],
+    ['Stabilized NOI', data.projectedNOI || '—'],
+    ['Total Raise', data.totalRaise || '—'],
+    ['Debt', data.debtFinancing || '—'],
   ];
 
-  valuationItems.forEach((item, index) => {
-    slide.addText(item.label, {
+  valItems.forEach(([label, value], i) => {
+    slide.addText(label, {
       x: 7.2,
-      y: 3.7 + index * 0.5,
-      w: 2.8,
+      y: 3.3 + i * 0.5,
+      w: 2.5,
       h: 0.4,
       fontSize: 11,
       color: colors.textLight,
       fontFace: 'Arial',
     });
-    slide.addText(item.value, {
-      x: 10.2,
-      y: 3.7 + index * 0.5,
-      w: 2.4,
+    slide.addText(value, {
+      x: 10.0,
+      y: 3.3 + i * 0.5,
+      w: 2.5,
       h: 0.4,
       fontSize: 11,
       color: colors.text,
@@ -1355,31 +1220,6 @@ function createFinancialsSlide(
       align: 'right',
     });
   });
-
-  // Assumptions note
-  slide.addText('Key Assumptions:', {
-    x: 7.2,
-    y: 5.3,
-    w: 5.4,
-    h: 0.35,
-    fontSize: 10,
-    color: colors.primary,
-    fontFace: 'Arial',
-    bold: true,
-  });
-
-  slide.addText(
-    '• 24-month stabilization period\n• 3% annual rent growth\n• 25 bps exit cap expansion',
-    {
-      x: 7.2,
-      y: 5.6,
-      w: 5.4,
-      h: 0.8,
-      fontSize: 9,
-      color: colors.textLight,
-      fontFace: 'Arial',
-    }
-  );
 }
 
 function createDealStructureSlide(
@@ -1388,69 +1228,57 @@ function createDealStructureSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
-
-  slide.addText('Deal Structure', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
+  addSlideHeader(slide, 'Deal Structure', colors, brand);
 
   // Investment terms
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 4.5,
+    h: 5.5,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Investment Terms', {
     x: 0.7,
-    y: 1.45,
+    y: 1.35,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
   const terms = [
-    { label: 'Total Raise', value: data.totalRaise || '$1.5M' },
-    { label: 'Minimum Investment', value: data.minimumInvestment || '$50,000' },
-    { label: 'Preferred Return', value: data.preferredReturn || '8%' },
-    { label: 'Distribution Frequency', value: data.distributionFrequency || 'Quarterly' },
-    { label: 'Hold Period', value: data.holdPeriod || '5-7 years' },
-    { label: 'GP Co-Invest', value: data.coInvestAmount || '5%' },
+    ['Total Raise', data.totalRaise || '$1.5M'],
+    ['Minimum Investment', data.minimumInvestment || '$50,000'],
+    ['Preferred Return', data.preferredReturn || '8%'],
+    ['Distributions', data.distributionFrequency || 'Quarterly'],
+    ['Hold Period', data.holdPeriod || '5-7 years'],
+    ['GP Co-Invest', data.coInvestAmount || '5%'],
   ];
 
-  terms.forEach((term, index) => {
-    slide.addText(term.label, {
+  terms.forEach(([label, value], i) => {
+    slide.addText(label, {
       x: 0.9,
-      y: 1.9 + index * 0.55,
+      y: 1.8 + i * 0.5,
       w: 2.8,
       h: 0.4,
-      fontSize: 12,
+      fontSize: 11,
       color: colors.textLight,
       fontFace: 'Arial',
     });
-    slide.addText(term.value, {
+    slide.addText(value, {
       x: 3.8,
-      y: 1.9 + index * 0.55,
+      y: 1.8 + i * 0.5,
       w: 2.5,
       h: 0.4,
-      fontSize: 12,
+      fontSize: 11,
       color: colors.text,
       fontFace: 'Arial',
       bold: true,
@@ -1458,12 +1286,12 @@ function createDealStructureSlide(
     });
   });
 
-  // Fee structure
+  // Fees
   slide.addText('Fee Structure', {
     x: 0.7,
-    y: 5.1,
+    y: 4.9,
     w: 5.6,
-    h: 0.35,
+    h: 0.3,
     fontSize: 12,
     color: colors.primary,
     fontFace: 'Arial',
@@ -1471,81 +1299,86 @@ function createDealStructureSlide(
   });
 
   const fees = [
-    { label: 'Acquisition Fee', value: data.acquisitionFee || '1.0%' },
-    { label: 'Asset Management', value: data.managementFee || '1.5%' },
-    { label: 'Disposition Fee', value: data.dispositionFee || '1.0%' },
+    ['Acquisition Fee', data.acquisitionFee || '1.0%'],
+    ['Asset Mgmt', data.managementFee || '1.5%'],
+    ['Disposition', data.dispositionFee || '1.0%'],
   ];
 
-  fees.forEach((fee, index) => {
-    slide.addText(`${fee.label}: ${fee.value}`, {
-      x: 0.9 + (index % 2) * 2.8,
-      y: 5.45 + Math.floor(index / 2) * 0.35,
-      w: 2.6,
+  fees.forEach(([label, value], i) => {
+    slide.addText(`${label}: ${value}`, {
+      x: 0.9 + i * 2,
+      y: 5.3,
+      w: 1.9,
       h: 0.3,
-      fontSize: 10,
+      fontSize: 9,
       color: colors.textLight,
       fontFace: 'Arial',
     });
   });
 
-  // Waterfall structure
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Waterfall box
+  slide.addShape('roundRect', {
     x: 6.8,
-    y: 1.3,
+    y: 1.2,
     w: 6,
-    h: 4.5,
+    h: 5.5,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Waterfall Structure', {
     x: 7.0,
-    y: 1.45,
+    y: 1.35,
     w: 5.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  // Waterfall tiers
-  const waterfallTiers = [
-    { tier: '1', threshold: 'Return of Capital', lp: '100%', gp: '0%' },
-    { tier: '2', threshold: `Pref Return (${data.preferredReturn || '8%'})`, lp: '100%', gp: '0%' },
-    { tier: '3', threshold: 'Up to 12% IRR', lp: '80%', gp: '20%' },
-    { tier: '4', threshold: 'Above 12% IRR', lp: '70%', gp: '30%' },
+  // Waterfall table - FIXED positioning
+  const waterfallData = [
+    ['Tier', 'Threshold', 'LP', 'GP'],
+    ['1', 'Return of Capital', '100%', '0%'],
+    ['2', `Pref (${data.preferredReturn || '8%'})`, '100%', '0%'],
+    ['3', 'Up to 12% IRR', '80%', '20%'],
+    ['4', 'Above 12% IRR', '70%', '30%'],
   ];
 
-  // Table header
-  slide.addText('Tier', { x: 7.2, y: 2.0, w: 0.6, h: 0.35, fontSize: 10, color: colors.textLight, fontFace: 'Arial', bold: true });
-  slide.addText('Threshold', { x: 7.9, y: 2.0, w: 2.5, h: 0.35, fontSize: 10, color: colors.textLight, fontFace: 'Arial', bold: true });
-  slide.addText('LP', { x: 10.5, y: 2.0, w: 0.8, h: 0.35, fontSize: 10, color: colors.textLight, fontFace: 'Arial', bold: true, align: 'center' });
-  slide.addText('GP', { x: 11.4, y: 2.0, w: 0.8, h: 0.35, fontSize: 10, color: colors.textLight, fontFace: 'Arial', bold: true, align: 'center' });
+  waterfallData.forEach((row, rowIdx) => {
+    const isHeader = rowIdx === 0;
+    row.forEach((cell, colIdx) => {
+      const colWidths = [0.6, 2.2, 0.8, 0.8];
+      const colX = [7.1, 7.7, 10.0, 10.9];
 
-  waterfallTiers.forEach((tier, index) => {
-    const y = 2.4 + index * 0.55;
-    slide.addText(tier.tier, { x: 7.2, y, w: 0.6, h: 0.45, fontSize: 11, color: colors.primary, fontFace: 'Arial', bold: true, align: 'center' });
-    slide.addText(tier.threshold, { x: 7.9, y, w: 2.5, h: 0.45, fontSize: 10, color: colors.text, fontFace: 'Arial' });
-    slide.addText(tier.lp, { x: 10.5, y, w: 0.8, h: 0.45, fontSize: 11, color: colors.secondary, fontFace: 'Arial', bold: true, align: 'center' });
-    slide.addText(tier.gp, { x: 11.4, y, w: 0.8, h: 0.45, fontSize: 11, color: colors.text, fontFace: 'Arial', align: 'center' });
+      slide.addText(cell, {
+        x: colX[colIdx],
+        y: 1.8 + rowIdx * 0.55,
+        w: colWidths[colIdx],
+        h: 0.45,
+        fontSize: isHeader ? 9 : 10,
+        color: isHeader ? colors.textLight : (colIdx === 2 ? colors.secondary : colors.text),
+        fontFace: 'Arial',
+        bold: isHeader || colIdx === 0 || colIdx === 2,
+        align: colIdx > 1 ? 'center' : 'left',
+      });
+    });
   });
 
-  // Visual waterfall note
-  slide.addText(
-    data.waterfallStructure ||
-      'Standard waterfall with LP-favorable structure. GP promotes earned only after investor capital returned with preferred return.',
-    {
+  // Waterfall description
+  if (data.waterfallStructure) {
+    slide.addText(data.waterfallStructure, {
       x: 7.0,
-      y: 4.9,
+      y: 5.0,
       w: 5.6,
-      h: 0.7,
+      h: 1.2,
       fontSize: 9,
       color: colors.textLight,
       fontFace: 'Arial',
       italic: true,
-    }
-  );
+    });
+  }
 }
 
 function createUseOfFundsSlide(
@@ -1554,128 +1387,113 @@ function createUseOfFundsSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
+  addSlideHeader(slide, 'Use of Funds', colors, brand);
 
-  slide.addText('Use of Funds', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
-
-  // Capital stack pie chart
+  // Capital stack chart
   const capitalData = [
     { name: 'Capital Stack', labels: ['LP Equity', 'GP Equity', 'Debt'], values: [60, 10, 30] },
   ];
 
-  slide.addChart(pptx.ChartType.doughnut, capitalData, {
+  slide.addChart('doughnut', capitalData, {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 5.5,
     h: 4,
     chartColors: [colors.primary, colors.secondary, colors.accent],
     showTitle: true,
     title: 'Capital Stack',
     titleColor: colors.text,
-    titleFontSize: 14,
-    titleFontFace: 'Arial',
+    titleFontSize: 12,
     titleBold: true,
     showLegend: true,
     legendPos: 'b',
     legendColor: colors.textLight,
     showPercent: true,
-    showValue: false,
     holeSize: 50,
   });
 
-  // Use of proceeds breakdown
-  slide.addShape(pptx.ShapeType.roundRect, {
-    x: 6.5,
-    y: 1.3,
-    w: 6.33,
+  // Use of proceeds
+  slide.addShape('roundRect', {
+    x: 6.3,
+    y: 1.2,
+    w: 6.5,
     h: 5.5,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Use of Proceeds', {
-    x: 6.7,
-    y: 1.45,
-    w: 5.9,
-    h: 0.35,
-    fontSize: 14,
+    x: 6.5,
+    y: 1.35,
+    w: 6.1,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  // Total at top
-  slide.addText(`Total Project Cost: ${data.totalProjectCost || '$8.5M'}`, {
-    x: 6.7,
-    y: 1.9,
-    w: 5.9,
-    h: 0.4,
-    fontSize: 16,
+  slide.addText(`Total: ${data.totalProjectCost || '$8.5M'}`, {
+    x: 6.5,
+    y: 1.7,
+    w: 6.1,
+    h: 0.35,
+    fontSize: 14,
     color: colors.text,
     fontFace: 'Arial',
     bold: true,
   });
 
   const uses = [
-    { category: 'Land Acquisition', amount: data.purchasePrice || '$1.2M', percent: '14%' },
-    { category: 'Hard Construction Costs', amount: '$5.5M', percent: '65%' },
-    { category: 'Soft Costs & Permits', amount: '$800K', percent: '9%' },
-    { category: 'Financing Costs', amount: '$400K', percent: '5%' },
-    { category: 'Operating Reserve', amount: '$350K', percent: '4%' },
-    { category: 'Developer Fee', amount: '$250K', percent: '3%' },
+    { cat: 'Land Acquisition', amt: data.purchasePrice || '$1.2M', pct: '14%' },
+    { cat: 'Hard Costs', amt: '$5.5M', pct: '65%' },
+    { cat: 'Soft Costs', amt: '$800K', pct: '9%' },
+    { cat: 'Financing Costs', amt: '$400K', pct: '5%' },
+    { cat: 'Operating Reserve', amt: '$350K', pct: '4%' },
+    { cat: 'Developer Fee', amt: '$250K', pct: '3%' },
   ];
 
-  uses.forEach((use, index) => {
-    const y = 2.5 + index * 0.6;
+  uses.forEach((u, i) => {
+    const y = 2.2 + i * 0.6;
+    const barWidth = parseFloat(u.pct) / 100 * 4;
 
-    // Category bar
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 6.9,
+    slide.addShape('rect', {
+      x: 6.7,
       y: y + 0.25,
-      w: 4.5 * (parseInt(use.percent) / 100),
-      h: 0.25,
+      w: barWidth,
+      h: 0.2,
       fill: { color: colors.primary },
     });
 
-    slide.addText(use.category, {
-      x: 6.9,
+    slide.addText(u.cat, {
+      x: 6.7,
       y,
-      w: 3,
+      w: 2.5,
       h: 0.25,
-      fontSize: 10,
+      fontSize: 9,
       color: colors.text,
       fontFace: 'Arial',
     });
-    slide.addText(use.amount, {
+    slide.addText(u.amt, {
       x: 10.2,
       y,
-      w: 1.3,
+      w: 1.2,
       h: 0.25,
-      fontSize: 10,
+      fontSize: 9,
       color: colors.text,
       fontFace: 'Arial',
       bold: true,
       align: 'right',
     });
-    slide.addText(use.percent, {
-      x: 11.6,
+    slide.addText(u.pct, {
+      x: 11.5,
       y,
       w: 0.8,
       h: 0.25,
-      fontSize: 10,
+      fontSize: 9,
       color: colors.textLight,
       fontFace: 'Arial',
       align: 'right',
@@ -1684,28 +1502,25 @@ function createUseOfFundsSlide(
 
   // Equity breakdown
   slide.addText('Equity Breakdown', {
-    x: 6.7,
-    y: 6.2,
-    w: 5.9,
-    h: 0.35,
-    fontSize: 12,
+    x: 6.5,
+    y: 5.9,
+    w: 6.1,
+    h: 0.3,
+    fontSize: 11,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
-  slide.addText(
-    `LP Equity: ${data.totalRaise || '$1.5M'} | GP Co-Invest: ${data.coInvestAmount || '5%'}`,
-    {
-      x: 6.7,
-      y: 6.5,
-      w: 5.9,
-      h: 0.3,
-      fontSize: 10,
-      color: colors.textLight,
-      fontFace: 'Arial',
-    }
-  );
+  slide.addText(`LP: ${data.totalRaise || '$1.5M'} | GP Co-Invest: ${data.coInvestAmount || '5%'}`, {
+    x: 6.5,
+    y: 6.2,
+    w: 6.1,
+    h: 0.3,
+    fontSize: 10,
+    color: colors.textLight,
+    fontFace: 'Arial',
+  });
 }
 
 function createExitSlide(
@@ -1714,111 +1529,87 @@ function createExitSlide(
   brand: BrandConfig,
   data: Partial<ProjectData>
 ) {
-  const slide = pptx.addSlide({ masterName: 'CONTENT_MASTER' });
+  const slide = pptx.addSlide();
+  slide.background = { color: colors.light };
 
-  if (brand.logo) {
-    slide.addImage({ data: brand.logo, x: 11.5, y: 0.2, w: 1.5, h: 0.6 });
-  }
-
-  slide.addText('Exit Strategy & Next Steps', {
-    x: 0.4,
-    y: 0.25,
-    w: 8,
-    h: 0.5,
-    fontSize: 24,
-    color: colors.white,
-    fontFace: 'Arial',
-    bold: true,
-  });
+  addSlideHeader(slide, 'Exit Strategy & Next Steps', colors, brand);
 
   // Exit scenarios
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 1.3,
+    y: 1.2,
     w: 8,
-    h: 3.2,
+    h: 3,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
   slide.addText('Exit Scenarios', {
     x: 0.7,
-    y: 1.45,
+    y: 1.35,
     w: 7.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
   });
 
   const scenarios = [
-    {
-      name: 'Sale to Institutional Buyer',
-      description: 'REIT, private equity, or regional operator acquisition at stabilization',
-      timeline: 'Year 5-7',
-    },
-    {
-      name: 'Refinance & Hold',
-      description: 'Cash-out refinance with continued operation and LP distributions',
-      timeline: 'Year 4-5',
-    },
-    {
-      name: 'Portfolio Sale',
-      description: 'Sale as part of larger multi-facility portfolio transaction',
-      timeline: 'Year 6-8',
-    },
+    { name: 'Sale to Institution', desc: 'REIT or PE acquisition', time: 'Yr 5-7' },
+    { name: 'Refinance & Hold', desc: 'Cash-out refi, continue ops', time: 'Yr 4-5' },
+    { name: 'Portfolio Sale', desc: 'Part of larger transaction', time: 'Yr 6-8' },
   ];
 
-  scenarios.forEach((scenario, index) => {
-    const y = 1.95 + index * 0.85;
-    slide.addText(scenario.name, {
+  scenarios.forEach((s, i) => {
+    const y = 1.8 + i * 0.7;
+    slide.addText(s.name, {
       x: 0.9,
       y,
-      w: 4,
-      h: 0.35,
-      fontSize: 12,
+      w: 3,
+      h: 0.3,
+      fontSize: 11,
       color: colors.text,
       fontFace: 'Arial',
       bold: true,
     });
-    slide.addText(scenario.timeline, {
-      x: 5,
+    slide.addText(s.time, {
+      x: 4,
       y,
-      w: 1.5,
-      h: 0.35,
-      fontSize: 11,
+      w: 1,
+      h: 0.3,
+      fontSize: 10,
       color: colors.secondary,
       fontFace: 'Arial',
       bold: true,
     });
-    slide.addText(scenario.description, {
+    slide.addText(s.desc, {
       x: 0.9,
-      y: y + 0.35,
-      w: 7.4,
-      h: 0.35,
-      fontSize: 10,
+      y: y + 0.3,
+      w: 7,
+      h: 0.3,
+      fontSize: 9,
       color: colors.textLight,
       fontFace: 'Arial',
     });
   });
 
-  // Timeline
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // Timeline box
+  slide.addShape('roundRect', {
     x: 8.8,
-    y: 1.3,
+    y: 1.2,
     w: 4,
-    h: 3.2,
+    h: 3,
     fill: { color: colors.white },
-    shadow: { type: 'outer', blur: 6, offset: 2, angle: 45, opacity: 0.12 },
+    shadow: { type: 'outer', blur: 4, offset: 1, angle: 45, opacity: 0.08 },
   });
 
-  slide.addText('Timeline', {
+  slide.addText('Target Timeline', {
     x: 9.0,
-    y: 1.45,
+    y: 1.35,
     w: 3.6,
-    h: 0.35,
-    fontSize: 14,
+    h: 0.3,
+    fontSize: 13,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
@@ -1826,30 +1617,30 @@ function createExitSlide(
 
   slide.addText(data.holdPeriod || '5-7 Years', {
     x: 9.0,
-    y: 1.9,
+    y: 1.8,
     w: 3.6,
-    h: 0.6,
-    fontSize: 24,
+    h: 0.5,
+    fontSize: 22,
     color: colors.primary,
     fontFace: 'Arial',
     bold: true,
     align: 'center',
   });
 
-  slide.addText('Target Hold Period', {
+  slide.addText('Hold Period', {
     x: 9.0,
-    y: 2.5,
+    y: 2.3,
     w: 3.6,
-    h: 0.3,
+    h: 0.25,
     fontSize: 10,
     color: colors.textLight,
     fontFace: 'Arial',
     align: 'center',
   });
 
-  slide.addText(data.exitStrategy || 'Primary: Sale at stabilization\nSecondary: Refinance & continue', {
+  slide.addText(data.exitStrategy || 'Sale at stabilization', {
     x: 9.0,
-    y: 3.0,
+    y: 2.7,
     w: 3.6,
     h: 0.8,
     fontSize: 10,
@@ -1858,51 +1649,50 @@ function createExitSlide(
     align: 'center',
   });
 
-  // Call to action
-  slide.addShape(pptx.ShapeType.roundRect, {
+  // CTA banner
+  slide.addShape('roundRect', {
     x: 0.5,
-    y: 4.7,
+    y: 4.4,
     w: 12.33,
-    h: 2.1,
+    h: 2.3,
     fill: { color: colors.primary },
   });
 
   slide.addText('Next Steps', {
     x: 0.7,
-    y: 4.9,
+    y: 4.6,
     w: 12,
-    h: 0.4,
-    fontSize: 18,
+    h: 0.35,
+    fontSize: 16,
     color: colors.white,
     fontFace: 'Arial',
     bold: true,
   });
 
-  const nextSteps = [
-    '1. Schedule a call to discuss the opportunity in detail',
-    '2. Review the Private Placement Memorandum (PPM)',
-    '3. Complete subscription documents and fund your investment',
+  const steps = [
+    '1. Schedule a call to discuss the opportunity',
+    '2. Review the Private Placement Memorandum',
+    '3. Complete subscription documents',
   ];
 
-  nextSteps.forEach((step, index) => {
-    slide.addText(step, {
+  steps.forEach((s, i) => {
+    slide.addText(s, {
       x: 0.9,
-      y: 5.4 + index * 0.4,
+      y: 5.1 + i * 0.38,
       w: 11.7,
       h: 0.35,
-      fontSize: 12,
+      fontSize: 11,
       color: 'B0D4F1',
       fontFace: 'Arial',
     });
   });
 
-  // Contact info
-  slide.addText(`Contact: ${data.sponsorName || brand.companyName || 'Sponsor'} | ${brand.companyName || ''}`, {
+  slide.addText(`Contact: ${data.sponsorName || brand.companyName || 'Sponsor'}`, {
     x: 0.7,
-    y: 6.5,
+    y: 6.3,
     w: 12,
     h: 0.25,
-    fontSize: 11,
+    fontSize: 10,
     color: colors.white,
     fontFace: 'Arial',
   });
