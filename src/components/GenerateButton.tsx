@@ -7,7 +7,7 @@ import { generateInvestorDeck } from '@/lib/deck-generator';
 import { cn } from '@/lib/utils';
 
 export function GenerateButton() {
-  const { brand, projectData, messages, completedCategories, isGenerating, setIsGenerating } =
+  const { brand, projectData, completedCategories, isGenerating, setIsGenerating } =
     useAppStore();
   const [downloaded, setDownloaded] = useState(false);
 
@@ -21,16 +21,9 @@ export function GenerateButton() {
     setDownloaded(false);
 
     try {
-      // Get conversation summary from messages
-      const conversationSummary = messages
-        .filter((m) => m.role === 'user')
-        .map((m) => m.content)
-        .join('\n');
-
       const blob = await generateInvestorDeck({
         brand,
         projectData,
-        conversationSummary,
       });
 
       // Create download link
